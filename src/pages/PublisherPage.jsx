@@ -17,7 +17,7 @@ export default function PublisherPage() {
 
   const fetchTasks = async () => {
     try {
-      const res = await axios.get("http://localhost:5166/api/ServiceTask/getall");
+      const res = await axios.get("http://localhost:5000/api/ServiceTask/getall");
       setTasks(res.data);
     } catch (err) {
       console.error("Xatolik:", err);
@@ -33,7 +33,7 @@ export default function PublisherPage() {
     e.preventDefault();
     try {
       setLoading(true);
-      await axios.post("http://localhost:5166/api/ServiceTask/create", {
+      await axios.post("http://localhost:5000/api/ServiceTask/create", {
         id: 0,
         title: newTask.title,
         description: newTask.description,
@@ -58,7 +58,7 @@ export default function PublisherPage() {
         status: parseInt(newStatus)
       };
       // Backend [HttpPut] metodiga yuborish
-      await axios.put("http://localhost:5166/api/ServiceTask/update", updatedTask);
+      await axios.put("http://localhost:5000/api/ServiceTask/update", updatedTask);
       fetchTasks(); // Ro'yxatni yangilash
     } catch (err) {
       alert("Statusni o'zgartirib bo'lmadi");

@@ -23,7 +23,7 @@ export default function AuthPage({ setUser }) {
 
       // Backend API manzili (Zavodda ishlatish uchun localhost o'rniga IP yozish tavsiya etiladi)
       const response = await axios.post(
-        `http://localhost:5166/api/Auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
+        `http://localhost:5000/api/Auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
       );
 
       const userData = response.data;

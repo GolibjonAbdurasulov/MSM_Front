@@ -20,7 +20,7 @@ export default function ReviewerPage() {
   const fetchTasks = async () => {
     try {
       // Zavod IP manzilini tekshiring (masalan: 10.22.171.30:5166)
-      const res = await axios.get("http://localhost:5166/api/ServiceTask/getall");
+      const res = await axios.get("http://localhost:5000/api/ServiceTask/getall");
       setTasks(res.data);
     } catch (err) {
       console.error("Xatolik:", err);

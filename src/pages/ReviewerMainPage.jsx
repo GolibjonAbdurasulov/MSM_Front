@@ -22,7 +22,7 @@ export default function ReviewerMainPage() {
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const res = await axios.get("http://localhost:5166/api/Service/getall");
+        const res = await axios.get("http://localhost:5000/api/Service/getall");
         setServices(res.data);
       } catch (err) {
         console.error("Servislarni yuklashda xatolik:", err);
@@ -37,7 +37,7 @@ export default function ReviewerMainPage() {
     setSelectedService(service);
     try {
       // Bu yerda o'z API manzilingizni tekshiring (masalan, serviceId bo'yicha filtr)
-      const res = await axios.get(`http://localhost:5166/api/ServiceTask/getall`);
+      const res = await axios.get(`http://localhost:5000/api/ServiceTask/getall`);
       // Agar backend filtrlamasa, frontda filtrlaymiz:
       const filteredTasks = res.data.filter(t => t.serviceId === service.id);
       setTasks(filteredTasks);
