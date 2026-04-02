@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; // Navigatsiya uchun
 import axios from "axios";
 
 // Statuslar enumiga mos o'zbekcha nomlar va ranglar
@@ -10,6 +11,7 @@ const statusNames = {
 };
 
 export default function ReviewerPage() {
+  const navigate = useNavigate(); // Navigatsiya funksiyasi
   const user = JSON.parse(localStorage.getItem("user"));
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +19,7 @@ export default function ReviewerPage() {
 
   const fetchTasks = async () => {
     try {
+      // Zavod IP manzilini tekshiring (masalan: 10.22.171.30:5166)
       const res = await axios.get("http://localhost:5166/api/ServiceTask/getall");
       setTasks(res.data);
     } catch (err) {
@@ -41,12 +44,26 @@ export default function ReviewerPage() {
         
         {/* Navbar */}
         <div className="flex justify-between items-center bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl mb-10 shadow-xl">
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-600 bg-clip-text text-transparent">
-              MSM Reviewer
-            </h1>
-            <p className="text-slate-400 text-sm">Reviewer: {user?.fullName || user?.email}</p>
+          <div className="flex items-center gap-4">
+            {/* ORQAGA TUGMASI */}
+            <button 
+              onClick={() => navigate("/reviewer_main")}
+              className="p-2 bg-white/5 hover:bg-emerald-500/20 border border-white/10 rounded-xl text-emerald-400 transition-all group"
+              title="Asosiy sahifaga qaytish"
+            >
+              <svg xmlns="http://w3.org" className="h-6 w-6 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-600 bg-clip-text text-transparent">
+                MSM Reviewer
+              </h1>
+              <p className="text-slate-400 text-sm">Foydalanuvchi: {user?.fullName || user?.email}</p>
+            </div>
           </div>
+
           <button onClick={handleLogout} className="bg-red-500/20 hover:bg-red-500 border border-red-500/50 px-5 py-2 rounded-xl transition-all text-sm font-bold">
             Chiqish
           </button>
@@ -62,9 +79,9 @@ export default function ReviewerPage() {
           {loading ? (
             <div className="text-center py-20 text-slate-500">Yuklanmoqda...</div>
           ) : (
-            <div className="flex flex-col gap-4"> {/* Tasklar bir qatorda chiqishi uchun flex-col */}
+            <div className="flex flex-col gap-4">
               {tasks.map((task) => (
-                <div key={task.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:bg-white/10 transition-all shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div key={task.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:bg-white/10 transition-all shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 border-l-emerald-500/30">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-lg font-bold text-emerald-400">{task.title}</h3>
@@ -77,7 +94,7 @@ export default function ReviewerPage() {
 
                   <div className="flex items-center gap-6 text-sm">
                     <div className="hidden sm:block text-right">
-                      <p className="text-slate-500 text-[10px] uppercase">Sana</p>
+                      <p className="text-slate-500 text-[10px] uppercase font-bold">Sana</p>
                       <p className="text-slate-300 font-medium">{new Date(task.createdDate).toLocaleDateString()}</p>
                     </div>
                     <button 
@@ -94,7 +111,7 @@ export default function ReviewerPage() {
         </div>
       </div>
 
-      {/* --- MODAL --- */}
+      {/* --- MODAL (Batafsil ko'rish) --- */}
       {selectedTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-[#1e293b] border border-white/10 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
@@ -116,21 +133,21 @@ export default function ReviewerPage() {
 
               <div className="space-y-6">
                 <div>
-                  <h4 className="text-slate-500 text-xs font-bold uppercase mb-2">Tavsif:</h4>
+                  <h4 className="text-slate-500 text-xs font-bold uppercase mb-2 tracking-widest">Tavsif:</h4>
                   <p className="text-slate-300 text-lg leading-relaxed bg-white/5 p-4 rounded-2xl border border-white/5">
                     {selectedTask.description || "Tavsif berilmagan."}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/5 p-4 rounded-2xl">
-                    <h4 className="text-slate-500 text-[10px] font-bold uppercase">Yaratilgan sana:</h4>
+                  <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Yaratilgan sana:</h4>
                     <p className="text-slate-300 font-bold mt-1">
                       {new Date(selectedTask.createdDate).toLocaleString()}
                     </p>
                   </div>
-                  <div className="bg-white/5 p-4 rounded-2xl">
-                    <h4 className="text-slate-500 text-[10px] font-bold uppercase">ID Raqami:</h4>
+                  <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <h4 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">ID Raqami:</h4>
                     <p className="text-emerald-400 font-bold mt-1">
                       #{selectedTask.id}
                     </p>
@@ -146,7 +163,7 @@ export default function ReviewerPage() {
             <div className="bg-white/5 p-4 flex justify-end">
               <button 
                 onClick={() => setSelectedTask(null)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-2 rounded-xl font-bold transition-all shadow-lg"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95"
               >
                 Yopish
               </button>

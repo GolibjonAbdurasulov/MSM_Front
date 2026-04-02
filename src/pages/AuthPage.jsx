@@ -11,99 +11,146 @@ export default function AuthPage({ setUser }) {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    // Kiritilgan ma'lumotlarni tekshirish
+    if (!email || !password) {
+      setError("Email va parolni kiriting");
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
 
-      // Backenddagi POST metodiga mos query string orqali yuborish
+      // Backend API manzili (Zavodda ishlatish uchun localhost o'rniga IP yozish tavsiya etiladi)
       const response = await axios.post(
         `http://localhost:5166/api/Auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
       );
 
       const userData = response.data;
 
+      // Foydalanuvchi topilmasa yoki ma'lumot noto'g'ri bo'lsa
       if (!userData) {
-        setError("Login yoki parol noto‘g‘ri");
+        setError("Email yoki parol noto‘g‘ri");
+        setLoading(false);
         return;
       }
 
+      // Ma'lumotlarni saqlash
       localStorage.setItem("user", JSON.stringify(userData));
-      if (setUser) setUser(userData); // App.jsx dagi setUser funksiyasini chaqirish
+      
+      // App.jsx dagi user holatini yangilash
+      if (setUser) setUser(userData); 
 
       // Inputlarni tozalash
       setEmail("");
       setPassword("");
 
-      // Yo'naltirish
-      if (userData.role === 1) navigate("/publisher");
-      else navigate("/reviewer");
+      // ROLLAR BO'YICHA YO'NALTIRISH:
+      // role 1 -> Publisher (Topshiriq yaratuvchi)
+      // role 2 -> Reviewer (Grafik monitoring)
+      if (userData.role === 1) {
+        navigate("/publisher");
+      } else if (userData.role === 2) {
+        navigate("/reviewer_main"); 
+      } else {
+        // Agar boshqa rollar bo'lsa (ixtiyoriy)
+        navigate("/reviewer_main");
+      }
 
     } catch (err) {
-      console.error(err);
-      setError("Server bilan bog‘lanishda xato");
+      console.error("Login xatosi:", err);
+      setError("Server bilan bog‘lanishda xato (CORS yoki Tarmoq)");
     } finally {
       setLoading(false);
     }
   };
 
+  // Enter tugmasini bosganda login qilish
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      handleLogin();
+    }
+  };
+
   return (
-    // "min-h-screen" o'rniga "h-screen" ishlatib ko'ring va "overflow-hidden" qo'shing
-    <div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950 px-4">
-      {/* Oq blok ko'rinishi uchun shaffoflikni biroz oshiramiz (bg-white/10 -> bg-white/20) */}
-      <div className="relative z-10 w-full max-w-md bg-white/20 backdrop-blur-xl border border-white/30 rounded-3xl shadow-2xl p-8 flex flex-col items-center">
+    <div className="h-screen w-full flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950 px-4 overflow-hidden">
+      
+      {/* Login Card */}
+      <div className="relative z-10 w-full max-w-md bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl p-10 flex flex-col items-center">
         
-        {/* Logo */}
-        <div className="w-16 h-16 mb-4 rounded-full bg-blue-500/30 flex items-center justify-center text-white text-3xl font-extrabold shadow-lg animate-bounce">
+        {/* Logo Animation */}
+        <div className="w-20 h-20 mb-6 rounded-full bg-blue-500/20 flex items-center justify-center text-white text-4xl font-black shadow-lg animate-bounce border border-blue-400/30">
           M
         </div>
 
-        {/* Title */}
-        <h1 className="text-2xl font-bold text-white mb-1 text-center">
+        {/* Header */}
+        <h1 className="text-3xl font-bold text-white mb-2 text-center tracking-tight">
           MSM ERP Login
         </h1>
-        <p className="text-blue-100/70 text-xs mb-6 text-center">
-          Tizimga kirish uchun ma'lumotlaringizni kiriting
+        <p className="text-blue-100/60 text-sm mb-8 text-center">
+          Tizimga kirish uchun ma'lumotlarni kiriting
         </p>
 
-        {/* Form */}
-        <div className="w-full space-y-4">
+        {/* Form Fields */}
+        <div className="w-full space-y-5">
           <div className="flex flex-col">
-            <label className="text-xs text-blue-100 mb-1 ml-1">Email</label>
+            <label className="text-xs font-semibold text-blue-200 mb-2 ml-1 uppercase tracking-wider">
+              Email Manzil
+            </label>
             <input
               type="email"
               value={email}
+              onKeyDown={handleKeyDown}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white outline-none focus:bg-white/20 focus:border-white transition-all"
+              placeholder="admin@msm.uz"
+              className="w-full px-5 py-4 rounded-2xl bg-white/10 border border-white/20 text-white placeholder-blue-100/30 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all duration-300"
             />
           </div>
 
           <div className="flex flex-col">
-            <label className="text-xs text-blue-100 mb-1 ml-1">Parol</label>
+            <label className="text-xs font-semibold text-blue-200 mb-2 ml-1 uppercase tracking-wider">
+              Parol
+            </label>
             <input
               type="password"
               value={password}
+              onKeyDown={handleKeyDown}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white outline-none focus:bg-white/20 focus:border-white transition-all"
+              placeholder="••••••••"
+              className="w-full px-5 py-4 rounded-2xl bg-white/10 border border-white/20 text-white placeholder-blue-100/30 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all duration-300"
             />
           </div>
 
+          {/* Error Message */}
           {error && (
-            <div className="bg-red-500/30 border border-red-500/50 text-red-100 text-xs px-3 py-2 rounded-xl text-center">
+            <div className="bg-red-500/20 border border-red-500/40 text-red-200 text-xs px-4 py-3 rounded-2xl animate-pulse text-center font-medium">
               {error}
             </div>
           )}
 
+          {/* Submit Button */}
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all text-white font-bold py-3 rounded-xl shadow-lg disabled:opacity-50 text-md"
+            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all text-white font-bold py-4 rounded-2xl shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-lg mt-2"
           >
-            {loading ? "Kirilmoqda..." : "Tizimga kirish"}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://w3.org" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Kirilmoqda...
+              </span>
+            ) : (
+              "Tizimga kirish"
+            )}
           </button>
         </div>
 
-        <div className="mt-8 text-center text-[10px] text-blue-100/40 uppercase tracking-widest">
-          MSM ERP Management System
+        {/* Footer Info */}
+        <div className="mt-10 text-center text-[10px] text-blue-100/30 uppercase tracking-[0.2em] font-bold">
+          Metallurgiya Servis Markazi ERP
         </div>
       </div>
     </div>
