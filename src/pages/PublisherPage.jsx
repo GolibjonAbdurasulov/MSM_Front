@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-
+import { BASE_URL } from "../services/api.js";
 // Statuslar enumiga mos o'zbekcha nomlar
 const statusNames = {
   1: { label: "Boshlandi", color: "bg-blue-500/10 border-blue-500/50 text-blue-500" },
@@ -17,7 +17,7 @@ export default function PublisherPage() {
 
   const fetchTasks = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/ServiceTask/getall");
+      const res = await axios.get(`${BASE_URL}//ServiceTask/getall`);
       setTasks(res.data);
     } catch (err) {
       console.error("Xatolik:", err);
@@ -33,7 +33,7 @@ export default function PublisherPage() {
     e.preventDefault();
     try {
       setLoading(true);
-      await axios.post("http://localhost:5000/api/ServiceTask/create", {
+      await axios.post(`${BASE_URL}/ServiceTask/create`, {
         id: 0,
         title: newTask.title,
         description: newTask.description,
@@ -57,8 +57,8 @@ export default function PublisherPage() {
         ...task,
         status: parseInt(newStatus)
       };
-      // Backend [HttpPut] metodiga yuborish
-      await axios.put("http://localhost:5000/api/ServiceTask/update", updatedTask);
+
+      await axios.put(`${BASE_URL}/ServiceTask/update`, updatedTask);
       fetchTasks(); // Ro'yxatni yangilash
     } catch (err) {
       alert("Statusni o'zgartirib bo'lmadi");

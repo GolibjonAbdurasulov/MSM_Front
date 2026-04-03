@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { BASE_URL } from "../services/api.js";
 
 export default function AuthPage({ setUser }) {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ export default function AuthPage({ setUser }) {
 
       // Backend API manzili (Zavodda ishlatish uchun localhost o'rniga IP yozish tavsiya etiladi)
       const response = await axios.post(
-        `http://localhost:5000/api/Auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
+       `${BASE_URL}/Auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
       );
 
       const userData = response.data;

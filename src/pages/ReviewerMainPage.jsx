@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-
+import { BASE_URL } from "../services/api.js";
 // Statuslar uchun o'zbekcha nomlar va ranglar
 const statusNames = {
   1: { label: "Boshlandi", color: "bg-blue-500/10 border-blue-500/50 text-blue-500" },
@@ -22,7 +22,7 @@ export default function ReviewerMainPage() {
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/Service/getall");
+        const res = await axios.get(`${BASE_URL}/Service/getall`);
         setServices(res.data);
       } catch (err) {
         console.error("Servislarni yuklashda xatolik:", err);
@@ -37,7 +37,7 @@ export default function ReviewerMainPage() {
     setSelectedService(service);
     try {
       // Bu yerda o'z API manzilingizni tekshiring (masalan, serviceId bo'yicha filtr)
-      const res = await axios.get(`http://localhost:5000/api/ServiceTask/getall`);
+      const res = await axios.get(`${BASE_URL}//ServiceTask/getall`);
       // Agar backend filtrlamasa, frontda filtrlaymiz:
       const filteredTasks = res.data.filter(t => t.serviceId === service.id);
       setTasks(filteredTasks);
@@ -55,61 +55,86 @@ export default function ReviewerMainPage() {
   };
 
 const renderGraph = () => {
-  const radius = 280; // MSM markazidan servisgacha bo'lgan masofa
+  // Masofalarni 43" ekran uchun optimallashtiramiz
+  const gapX = 400;      
+  const gapY = 260;      
+  const blockWidth = 280;  // Barcha bloklar uchun bir xil kenglik
+  const blockHeight = 160; // Barcha bloklar uchun bir xil balandlik
+
+  const positions = [
+    { x: -gapX, y: -gapY }, { x: 0, y: -gapY }, { x: gapX, y: -gapY }, 
+    { x: -gapX, y: 0 },                         { x: gapX, y: 0 },    
+    { x: -gapX, y: gapY },  { x: 0, y: gapY },  { x: gapX, y: gapY }  
+  ];
 
   return (
-    <div className="relative w-full h-[700px] flex items-center justify-center">
+    <div className="relative w-full h-[850px] flex items-center justify-center overflow-hidden">
       
-      {/* 1. Markaziy MSM Hub */}
-      <div className="relative z-30 w-44 h-44 rounded-full bg-gradient-to-br from-emerald-500 to-teal-700 p-1 shadow-[0_0_60px_rgba(16,185,129,0.4)] flex items-center justify-center border-4 border-[#0f172a]">
+      {/* 1. SVG Chiziqlar (To'g'ri ulanish) */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+        {services.map((service, index) => {
+          const pos = positions[index % positions.length];
+          return (
+            <g key={`line-${service.id}`}>
+              <line 
+                x1="50%" y1="50%" 
+                x2={`calc(50% + ${pos.x}px)`} y2={`calc(50% + ${pos.y}px)`}
+                stroke="rgba(16, 185, 129, 0.3)" 
+                strokeWidth="2"
+              />
+              <circle 
+                cx={`calc(50% + ${pos.x}px)`} 
+                cy={`calc(50% + ${pos.y}px)`} 
+                r="4" 
+                fill="#10b981" 
+              />
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* 2. Markaziy MSM HUB */}
+      <div className="relative z-30 w-56 h-56 bg-[#1e293b] border-4 border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.3)] rounded-[2.5rem] flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-4xl font-black text-white tracking-tighter">MSM</h2>
-          <p className="text-[10px] text-emerald-100 font-bold uppercase tracking-widest">Metallurgiya</p>
+          <div className="text-6xl font-black text-white tracking-tighter">MSM</div>
+          <p className="mt-2 text-[10px] text-emerald-400 font-bold uppercase tracking-[0.3em]">ERP SYSTEM</p>
         </div>
       </div>
 
-      {/* 2. Servislar va ularning MSM bilan ulanishi */}
-      {services.map((service) => {
-        const angleInRad = (service.angle - 90) * (Math.PI / 180);
-        const x = Math.cos(angleInRad) * radius;
-        const y = Math.sin(angleInRad) * radius;
-
+      {/* 3. Servislar (Bir xil o'lchamdagi bloklar) */}
+      {services.map((service, index) => {
+        const pos = positions[index % positions.length];
+        
         return (
-          <React.Fragment key={service.id}>
-            {/* STRELKA: Ekranning markazidan (MSM dan) chiqadi */}
-            <div 
-              className="absolute top-1/2 left-1/2 w-[2px] bg-gradient-to-t from-emerald-500/80 to-transparent origin-bottom z-10 pointer-events-none"
-              style={{ 
-                // Chiziq markazdan (top-1/2 left-1/2) boshlanib, servis tomonga buriladi
-                transform: `translate(-50%, -100%) rotate(${service.angle}deg)`,
-                height: `${radius - 40}px`, // Chiziq uzunligi servis blokigacha yetadi
-              }}
+          <div 
+            key={service.id}
+            className="absolute transition-all duration-700 z-20"
+            style={{ 
+              transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
+              top: '50%',
+              left: '50%',
+              width: `${blockWidth}px`
+            }}
+          >
+            <button
+              onClick={() => fetchTasks(service)}
+              className="w-full h-[160px] group bg-[#1e293b]/95 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all shadow-2xl text-left flex flex-col justify-between"
             >
-              {/* STRELKA UCHI: Chiziqning eng uchida, servisga tegib turadi */}
-              <div 
-                className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full w-0 h-0 
-                           border-l-[6px] border-l-transparent 
-                           border-r-[6px] border-r-transparent 
-                           border-b-[10px] border-b-emerald-500"
-              ></div>
-            </div>
-
-            {/* SERVIS BLOKI */}
-            <div 
-              className="absolute transition-all duration-700 z-20"
-              style={{ transform: `translate(${x}px, ${y}px)` }}
-            >
-              <button
-                onClick={() => fetchTasks(service)}
-                className="group relative bg-[#1e293b]/90 backdrop-blur-xl border border-white/10 p-5 rounded-2xl hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 w-48 shadow-2xl text-left"
-              >
-                <h3 className="text-lg font-bold text-emerald-400 mb-1">{service.name}</h3>
-                <p className="text-[9px] text-slate-400 line-clamp-2 uppercase font-medium">
-                  {service.description}
-                </p>
-              </button>
-            </div>
-          </React.Fragment>
+              <div>
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors uppercase line-clamp-2 leading-tight">
+                    {service.name}
+                  </h3>
+                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></div>
+                </div>
+                <div className="w-10 h-0.5 bg-emerald-500/30 group-hover:w-full transition-all duration-500"></div>
+              </div>
+              
+              <p className="text-[11px] text-slate-400 leading-snug font-bold uppercase opacity-70 line-clamp-3">
+                {service.description || "Tavsif mavjud emas"}
+              </p>
+            </button>
+          </div>
         );
       })}
     </div>

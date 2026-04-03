@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:5000/api";
+export const BASE_URL = "http://localhost:5000/api";
 
 export async function login(email, password) {
   const response = await fetch(`${BASE_URL}/Auth`, {
