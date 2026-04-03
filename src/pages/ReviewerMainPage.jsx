@@ -1,65 +1,109 @@
 import React, { useState, useEffect } from "react";
+import * as signalR from "@microsoft/signalr";
 import axios from "axios";
 import { BASE_URL } from "../services/api.js";
-// Statuslar uchun o'zbekcha nomlar va ranglar
-const statusNames = {
-  1: { label: "Boshlandi", color: "bg-blue-500/10 border-blue-500/50 text-blue-500" },
-  2: { label: "Jarayonda", color: "bg-yellow-500/10 border-yellow-500/50 text-yellow-500" },
-  3: { label: "Tugallandi", color: "bg-green-500/10 border-green-500/50 text-green-500" },
-  4: { label: "Muvaffaqiyatsiz", color: "bg-red-500/10 border-red-500/50 text-red-500" }
-};
+let connection = null; 
 
 export default function ReviewerMainPage() {
-  const user = JSON.parse(localStorage.getItem("user"));
-  const [view, setView] = useState("graph"); 
   const [services, setServices] = useState([]);
-  const [selectedService, setSelectedService] = useState(null);
-  const [tasks, setTasks] = useState([]);
+  const [allTasks, setAllTasks] = useState([]);
+  const [view, setView] = useState("graph");
   const [loading, setLoading] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
+const user = JSON.parse(localStorage.getItem("user"));
 
-  // 1. Sahifa yuklanganda barcha servislarni API'dan olish
-  useEffect(() => {
-    const fetchServices = async () => {
-      try {
-        const res = await axios.get(`${BASE_URL}/Service/getall`);
-        setServices(res.data);
-      } catch (err) {
-        console.error("Servislarni yuklashda xatolik:", err);
-      }
-    };
-    fetchServices();
-  }, []);
-
-  // 2. Tanlangan servisga tegishli tasklarni olish
-  const fetchTasks = async (service) => {
-    setLoading(true);
-    setSelectedService(service);
+  const handleLogout = () => {
+    localStorage.removeItem("user"); // Foydalanuvchi ma'lumotini o'chirish
+    window.location.href = "/";      // Login sahifasiga qaytarish
+  };
+  // 1. Ma'lumotlarni yuklash funksiyasi
+  const fetchData = async () => {
     try {
-      // Bu yerda o'z API manzilingizni tekshiring (masalan, serviceId bo'yicha filtr)
-      const res = await axios.get(`${BASE_URL}//ServiceTask/getall`);
-      // Agar backend filtrlamasa, frontda filtrlaymiz:
-      const filteredTasks = res.data.filter(t => t.serviceId === service.id);
-      setTasks(filteredTasks);
-      setView("tasks");
+      const [servRes, tasksRes] = await Promise.all([
+        axios.get(`${BASE_URL}/Service/getall`),
+        axios.get(`${BASE_URL}/ServiceTask/getall`)
+      ]);
+      setServices(servRes.data);
+      setAllTasks(tasksRes.data);
     } catch (err) {
-      console.error("Tasklarni yuklashda xatolik:", err);
-    } finally {
-      setLoading(false);
+      console.error("Xatolik:", err);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    window.location.href = "/";
+  
+  useEffect(() => {
+    fetchData();
+
+    // Faqat bir marta ulanish yaratish
+    if (!connection) {
+      connection = new signalR.HubConnectionBuilder()
+        .withUrl("http://localhost:5000/monitoringHub", {
+          skipNegotiation: true, // Negotiation bosqichini o'tkazib yuborish
+          transport: signalR.HttpTransportType.WebSockets // To'g'ridan-to'g'ri WebSocket
+        })
+        .withAutomaticReconnect()
+        .build();
+    }
+
+    const startSignalR = async () => {
+      if (connection.state === signalR.HubConnectionState.Disconnected) {
+        try {
+          await connection.start();
+          console.log("SignalR ulandi!");
+          
+          // Xabarni tinglash
+          connection.off("UpdateTasks"); // Eskilarini tozalash
+          connection.on("UpdateTasks", () => {
+            fetchData();
+          });
+        } catch (err) {
+          console.log("Ulanish kutilmoqda...");
+        }
+      }
+    };
+
+    startSignalR();
+
+    // Cleanup qismida stop() qilmaslik tavsiya etiladi (Strict Mode uchun)
+    // Faqat xabarni o'chirish kifoya
+    return () => {
+      if (connection) {
+        connection.off("UpdateTasks");
+      }
+    };
+  }, []);
+
+
+
+  // 3. Status Logikasi (Siz so'ragan ranglar)
+  const getServiceStatus = (serviceId) => {
+    const serviceTasks = allTasks.filter(t => t.serviceId === serviceId);
+    
+    // Agar birorta bajarilmagan ish bo'lsa (Status: 4) -> Qizil
+    if (serviceTasks.some(t => t.status === 4)) return "bg-red-600 shadow-[0_0_15px_#dc2626]";
+    
+    // Ish bajarilayotgan bo'lsa (Status: 1, 2) -> Ko'k yonib o'chadi
+    if (serviceTasks.some(t => t.status === 1 || t.status === 2)) return "bg-blue-500 animate-pulse shadow-[0_0_15px_#3b82f6]";
+    
+    // Ish yo'q bo'lsa -> Yashil yonib o'chadi
+    return "bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]";
+  };
+
+  const getMSMStyle = () => {
+    // Agar hamma joyda ishlar tugagan bo'lsa -> Yashil
+    // Birorta joyda ish ketsa -> Ko'k
+    const isAnyActive = allTasks.some(t => t.status === 1 || t.status === 2);
+    const isAnyError = allTasks.some(t => t.status === 4);
+
+    if (isAnyError) return "border-red-500 shadow-[0_0_60px_rgba(239,68,68,0.3)]";
+    if (isAnyActive) return "border-blue-500 shadow-[0_0_60px_rgba(59,130,246,0.4)]";
+    return "border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.3)]";
   };
 
 const renderGraph = () => {
-  // Masofalarni 43" ekran uchun optimallashtiramiz
-  const gapX = 400;      
-  const gapY = 260;      
-  const blockWidth = 280;  // Barcha bloklar uchun bir xil kenglik
-  const blockHeight = 160; // Barcha bloklar uchun bir xil balandlik
+  const gapX = 440;      
+  const gapY = 280;      
+  const blockWidth = 230;  // Hajm ixcham
+  const blockHeight = 140; // Balandlik biroz oshirildi matn sig'ishi uchun
 
   const positions = [
     { x: -gapX, y: -gapY }, { x: 0, y: -gapY }, { x: gapX, y: -gapY }, 
@@ -70,7 +114,7 @@ const renderGraph = () => {
   return (
     <div className="relative w-full h-[850px] flex items-center justify-center overflow-hidden">
       
-      {/* 1. SVG Chiziqlar (To'g'ri ulanish) */}
+      {/* 1. SVG Chiziqlar */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
         {services.map((service, index) => {
           const pos = positions[index % positions.length];
@@ -82,26 +126,21 @@ const renderGraph = () => {
                 stroke="rgba(16, 185, 129, 0.3)" 
                 strokeWidth="2"
               />
-              <circle 
-                cx={`calc(50% + ${pos.x}px)`} 
-                cy={`calc(50% + ${pos.y}px)`} 
-                r="4" 
-                fill="#10b981" 
-              />
+              <circle cx={`calc(50% + ${pos.x}px)`} cy={`calc(50% + ${pos.y}px)`} r="4" fill="#10b981" />
             </g>
           );
         })}
       </svg>
 
       {/* 2. Markaziy MSM HUB */}
-      <div className="relative z-30 w-56 h-56 bg-[#1e293b] border-4 border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.3)] rounded-[2.5rem] flex items-center justify-center">
+      <div className="relative z-30 w-52 h-52 bg-[#1e293b] border-4 border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.3)] rounded-[2.5rem] flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl font-black text-white tracking-tighter">MSM</div>
-          <p className="mt-2 text-[10px] text-emerald-400 font-bold uppercase tracking-[0.3em]">ERP SYSTEM</p>
+          <p className="mt-2 text-[11px] text-white font-bold uppercase tracking-[0.4em]">Metallurgiya Service Markazi</p>
         </div>
       </div>
 
-      {/* 3. Servislar (Bir xil o'lchamdagi bloklar) */}
+      {/* 3. Servis Bloklari - KATTA MATN BILAN */}
       {services.map((service, index) => {
         const pos = positions[index % positions.length];
         
@@ -118,20 +157,22 @@ const renderGraph = () => {
           >
             <button
               onClick={() => fetchTasks(service)}
-              className="w-full h-[160px] group bg-[#1e293b]/95 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all shadow-2xl text-left flex flex-col justify-between"
+              className="w-full h-[140px] group bg-[#1e293b]/95 backdrop-blur-2xl border-2 border-white/10 p-5 rounded-[1.8rem] hover:border-emerald-500 hover:bg-emerald-500/10 transition-all shadow-2xl text-left flex flex-col justify-between"
             >
               <div>
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors uppercase line-clamp-2 leading-tight">
+                  {/* Sarlavha: text-lg va font-black (juda qalin) qilindi */}
+                  <h3 className="text-lg font-black text-white group-hover:text-emerald-400 transition-colors uppercase leading-none tracking-tight">
                     {service.name}
                   </h3>
-                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></div>
+                  <div className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
                 </div>
-                <div className="w-10 h-0.5 bg-emerald-500/30 group-hover:w-full transition-all duration-500"></div>
+                <div className="w-12 h-1 bg-emerald-500/40 group-hover:w-full transition-all duration-500 rounded-full"></div>
               </div>
               
-              <p className="text-[11px] text-slate-400 leading-snug font-bold uppercase opacity-70 line-clamp-3">
-                {service.description || "Tavsif mavjud emas"}
+              {/* Tavsif: text-[12px] va font-bold qilindi */}
+              <p className="text-[12px] text-slate-300 leading-tight font-bold uppercase opacity-90 line-clamp-2">
+                {service.description || "XIZMAT TAVSIFI"}
               </p>
             </button>
           </div>
@@ -140,6 +181,7 @@ const renderGraph = () => {
     </div>
   );
 };
+
 
 
 

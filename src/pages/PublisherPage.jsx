@@ -17,7 +17,7 @@ export default function PublisherPage() {
 
   const fetchTasks = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}//ServiceTask/getall`);
+      const res = await axios.get(`${BASE_URL}/ServiceTask/getall`);
       setTasks(res.data);
     } catch (err) {
       console.error("Xatolik:", err);
