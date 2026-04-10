@@ -1,276 +1,341 @@
-import React, { useState, useEffect } from "react";
-import * as signalR from "@microsoft/signalr";
+import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { BASE_URL } from "../services/api.js";
-let connection = null; 
+import * as signalR from "@microsoft/signalr";
 
 export default function ReviewerMainPage() {
-  const [services, setServices] = useState([]);
-  const [allTasks, setAllTasks] = useState([]);
-  const [view, setView] = useState("graph");
-  const [loading, setLoading] = useState(false);
-const user = JSON.parse(localStorage.getItem("user"));
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(localStorage.getItem("token") || "");
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+
+  const navigate = useNavigate();
+
+  const storedUser = localStorage.getItem("user");
+  const user = storedUser ? JSON.parse(storedUser) : null;
+
+  // Agar user yoki token bo'lmasa login sahifasiga yuborish
+  useEffect(() => {
+    if (!user || !token) {
+      navigate("/", { replace: true });
+    }
+  }, [user, token, navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user"); // Foydalanuvchi ma'lumotini o'chirish
-    window.location.href = "/";      // Login sahifasiga qaytarish
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    setToken("");
+    navigate("/", { replace: true });
   };
-  // 1. Ma'lumotlarni yuklash funksiyasi
-  const fetchData = async () => {
+
+  // Departamentlarni olish funksiyasi
+  const fetchDepartments = useCallback(async () => {
+    if (!token) return;
+
     try {
-      const [servRes, tasksRes] = await Promise.all([
-        axios.get(`${BASE_URL}/Service/getall`),
-        axios.get(`${BASE_URL}/ServiceTask/getall`)
-      ]);
-      setServices(servRes.data);
-      setAllTasks(tasksRes.data);
-    } catch (err) {
-      console.error("Xatolik:", err);
-    }
-  };
+      setLoading(true);
 
-  
-  useEffect(() => {
-    fetchData();
-
-    // Faqat bir marta ulanish yaratish
-    if (!connection) {
-      connection = new signalR.HubConnectionBuilder()
-        .withUrl("http://localhost:5000/monitoringHub", {
-          skipNegotiation: true, // Negotiation bosqichini o'tkazib yuborish
-          transport: signalR.HttpTransportType.WebSockets // To'g'ridan-to'g'ri WebSocket
-        })
-        .withAutomaticReconnect()
-        .build();
-    }
-
-    const startSignalR = async () => {
-      if (connection.state === signalR.HubConnectionState.Disconnected) {
-        try {
-          await connection.start();
-          console.log("SignalR ulandi!");
-          
-          // Xabarni tinglash
-          connection.off("UpdateTasks"); // Eskilarini tozalash
-          connection.on("UpdateTasks", () => {
-            fetchData();
-          });
-        } catch (err) {
-          console.log("Ulanish kutilmoqda...");
+      const token = localStorage.getItem("token");
+      const res = await axios.get(
+        "http://localhost:5000/api/Department/GetAllDepartments",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
+      );
+
+      const departmentsWithCounts = await Promise.all(
+        (res.data.content || []).map(async (department) => {
+          try {
+            const countRes = await axios.get(
+              `${BASE_URL}/Job/GetDepartmentActiveJobsCount`,
+              {
+                params: {
+                  departmentId: department.id,
+                  time: new Date(selectedDate).toISOString(),
+                },
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            return {
+              ...department,
+              activeJobsCount: countRes.data.content || 0,
+            };
+          } catch (err) {
+            console.error("Count olishda xatolik:", err);
+            return {
+              ...department,
+              activeJobsCount: 0,
+            };
+          }
+        })
+      );
+
+      setDepartments(departmentsWithCounts);
+    } catch (error) {
+      console.error("Departmentlarni olishda xatolik:", error);
+
+      if (error.response?.status === 401) {
+        handleLogout();
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDate, token]);
 
-    startSignalR();
+  // Initial fetch
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
-    // Cleanup qismida stop() qilmaslik tavsiya etiladi (Strict Mode uchun)
-    // Faqat xabarni o'chirish kifoya
-    return () => {
-      if (connection) {
-        connection.off("UpdateTasks");
-      }
-    };
-  }, []);
+useEffect(() => {
+  if (!token) return;
 
+  const connection = new signalR.HubConnectionBuilder()
+    .withUrl("http://localhost:5000/jobHub", {
+      accessTokenFactory: () => token,
+      transport: signalR.HttpTransportType.WebSockets, // faqat WebSocket
+      skipNegotiation: true, // negotiationni o‘tkazib yuboradi
+    })
+    .withAutomaticReconnect()
+    .build();
 
-
-  // 3. Status Logikasi (Siz so'ragan ranglar)
-  const getServiceStatus = (serviceId) => {
-    const serviceTasks = allTasks.filter(t => t.serviceId === serviceId);
-    
-    // Agar birorta bajarilmagan ish bo'lsa (Status: 4) -> Qizil
-    if (serviceTasks.some(t => t.status === 4)) return "bg-red-600 shadow-[0_0_15px_#dc2626]";
-    
-    // Ish bajarilayotgan bo'lsa (Status: 1, 2) -> Ko'k yonib o'chadi
-    if (serviceTasks.some(t => t.status === 1 || t.status === 2)) return "bg-blue-500 animate-pulse shadow-[0_0_15px_#3b82f6]";
-    
-    // Ish yo'q bo'lsa -> Yashil yonib o'chadi
-    return "bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]";
+  const startConnection = async () => {
+    try {
+      await connection.start();
+      console.log("SignalR connected WebSocket bilan");
+    } catch (err) {
+      console.error("SignalR ulanish xatosi:", err);
+    }
   };
 
-  const getMSMStyle = () => {
-    // Agar hamma joyda ishlar tugagan bo'lsa -> Yashil
-    // Birorta joyda ish ketsa -> Ko'k
-    const isAnyActive = allTasks.some(t => t.status === 1 || t.status === 2);
-    const isAnyError = allTasks.some(t => t.status === 4);
+  startConnection();
 
-    if (isAnyError) return "border-red-500 shadow-[0_0_60px_rgba(239,68,68,0.3)]";
-    if (isAnyActive) return "border-blue-500 shadow-[0_0_60px_rgba(59,130,246,0.4)]";
-    return "border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.3)]";
+  connection.on("JobChanged", (data) => {
+    if (data.date === selectedDate) {
+      fetchDepartments();
+    }
+  });
+
+  return () => {
+    connection.stop().catch((err) => console.error("SignalR stop xatosi:", err));
   };
+}, [selectedDate, token, fetchDepartments]);
 
-const renderGraph = () => {
-  const gapX = 440;      
-  const gapY = 280;      
-  const blockWidth = 230;  // Hajm ixcham
-  const blockHeight = 140; // Balandlik biroz oshirildi matn sig'ishi uchun
+  // --- renderGraph funksiyasi shu yerda qoladi ---
+  const renderGraph = () => {
+    const total = departments.length;
+    const hasAnyJobs = departments.some(
+      (department) => department.activeJobsCount > 0
+    );
 
-  const positions = [
-    { x: -gapX, y: -gapY }, { x: 0, y: -gapY }, { x: gapX, y: -gapY }, 
-    { x: -gapX, y: 0 },                         { x: gapX, y: 0 },    
-    { x: -gapX, y: gapY },  { x: 0, y: gapY },  { x: gapX, y: gapY }  
-  ];
+    const radiusX = total > 10 ? 620 : 540;
+    const radiusY = total > 10 ? 360 : 300;
+    const cardWidth = 240;
+    const centerSize = 270;
+    const containerHeight = "1100px";
 
-  return (
-    <div className="relative w-full h-[850px] flex items-center justify-center overflow-hidden">
-      
-      {/* 1. SVG Chiziqlar */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-        {services.map((service, index) => {
-          const pos = positions[index % positions.length];
+    const getPosition = (index) => {
+      const angle = ((360 / total) * index - 90) * (Math.PI / 180);
+      return {
+        x: Math.cos(angle) * radiusX,
+        y: Math.sin(angle) * radiusY,
+      };
+    };
+
+    return (
+      <div
+        className="relative w-full flex items-center justify-center overflow-hidden"
+        style={{ height: containerHeight }}
+      >
+        <style>
+          {`
+            @keyframes dashMoveToCenter {
+              from { stroke-dashoffset: 0; }
+              to { stroke-dashoffset: 40; }
+            }
+            .animated-line { animation: dashMoveToCenter 1.8s linear infinite; }
+            @keyframes pulseGlow {
+              0% { box-shadow: 0 0 0 rgba(16,185,129,0.15); }
+              50% { box-shadow: 0 0 40px rgba(16,185,129,0.35); }
+              100% { box-shadow: 0 0 0 rgba(16,185,129,0.15); }
+            }
+            .pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+          `}
+        </style>
+
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+          {departments.map((department, index) => {
+            const pos = getPosition(index);
+            const hasJobs = department.activeJobsCount > 0;
+            return (
+              <g key={department.id}>
+                <line
+                  x1="50%"
+                  y1="50%"
+                  x2={`calc(50% + ${pos.x}px)`}
+                  y2={`calc(50% + ${pos.y}px)`}
+                  stroke={hasJobs ? "#10b981" : "#9ca3af"}
+                  strokeWidth="3"
+                  strokeDasharray="12 10"
+                  className={hasJobs ? "animated-line" : ""}
+                  style={{ strokeDashoffset: 0, opacity: hasJobs ? 0.9 : 0.45 }}
+                />
+                <circle
+                  cx={`calc(50% + ${pos.x}px)`}
+                  cy={`calc(50% + ${pos.y}px)`}
+                  r="6"
+                  fill={hasJobs ? "#10b981" : "#9ca3af"}
+                />
+              </g>
+            );
+          })}
+        </svg>
+
+        <div
+          className={`relative z-30 bg-white border-4 rounded-[3rem] flex items-center justify-center transition-all duration-500 ${
+            hasAnyJobs ? "border-emerald-500 pulse-glow" : "border-gray-400"
+          }`}
+          style={{ width: `${centerSize}px`, height: `${centerSize}px` }}
+        >
+          <div className="text-center px-6">
+            <div className="text-6xl font-black text-gray-900 tracking-tight">
+              MSM
+            </div>
+            <div className="w-20 h-1 bg-gray-300 rounded-full mx-auto my-4"></div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-[0.35em] font-bold leading-relaxed">
+              Metallurgiya
+              <br />
+              Servis Markazi
+            </p>
+            <div className="mt-5 text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">
+              {hasAnyJobs ? "Active Jobs" : "No Active Jobs"}
+            </div>
+          </div>
+        </div>
+
+        {departments.map((department, index) => {
+          const pos = getPosition(index);
+          const hasJobs = department.activeJobsCount > 0;
+
           return (
-            <g key={`line-${service.id}`}>
-              <line 
-                x1="50%" y1="50%" 
-                x2={`calc(50% + ${pos.x}px)`} y2={`calc(50% + ${pos.y}px)`}
-                stroke="rgba(16, 185, 129, 0.3)" 
-                strokeWidth="2"
-              />
-              <circle cx={`calc(50% + ${pos.x}px)`} cy={`calc(50% + ${pos.y}px)`} r="4" fill="#10b981" />
-            </g>
+            <div
+              key={department.id}
+              className="absolute z-20 transition-all duration-700"
+              style={{
+                top: "50%",
+                left: "50%",
+                transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
+                width: `${cardWidth}px`,
+              }}
+            >
+              <div
+                className={`group w-full bg-white border rounded-[2rem] px-5 py-5 text-left hover:scale-[1.04] transition-all duration-300 shadow-lg hover:shadow-2xl cursor-pointer ${
+                  hasJobs
+                    ? "border-emerald-200 hover:border-emerald-400"
+                    : "border-gray-200 hover:border-gray-400"
+                }`}
+                onClick={() =>
+                  navigate(
+                    `/reviewer_department/${department.id}?date=${selectedDate}`
+                  )
+                }
+              >
+                <div className="flex justify-between items-start gap-3 mb-4">
+                  <div className="flex-1 min-w-0">
+                    <h3
+                      className={`font-black uppercase leading-tight transition-colors break-words text-base ${
+                        hasJobs
+                          ? "text-gray-900 group-hover:text-emerald-600"
+                          : "text-gray-700 group-hover:text-gray-900"
+                      }`}
+                    >
+                      {department.departmentShortName}
+                    </h3>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] mt-1">
+                      Bo'limi
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-gray-600 leading-relaxed break-words">
+                  {department.departmentFullName}
+                </p>
+              </div>
+            </div>
           );
         })}
-      </svg>
-
-      {/* 2. Markaziy MSM HUB */}
-      <div className="relative z-30 w-52 h-52 bg-[#1e293b] border-4 border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.3)] rounded-[2.5rem] flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl font-black text-white tracking-tighter">MSM</div>
-          <p className="mt-2 text-[11px] text-white font-bold uppercase tracking-[0.4em]">Metallurgiya Service Markazi</p>
-        </div>
       </div>
-
-      {/* 3. Servis Bloklari - KATTA MATN BILAN */}
-      {services.map((service, index) => {
-        const pos = positions[index % positions.length];
-        
-        return (
-          <div 
-            key={service.id}
-            className="absolute transition-all duration-700 z-20"
-            style={{ 
-              transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
-              top: '50%',
-              left: '50%',
-              width: `${blockWidth}px`
-            }}
-          >
-            <button
-              onClick={() => fetchTasks(service)}
-              className="w-full h-[140px] group bg-[#1e293b]/95 backdrop-blur-2xl border-2 border-white/10 p-5 rounded-[1.8rem] hover:border-emerald-500 hover:bg-emerald-500/10 transition-all shadow-2xl text-left flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  {/* Sarlavha: text-lg va font-black (juda qalin) qilindi */}
-                  <h3 className="text-lg font-black text-white group-hover:text-emerald-400 transition-colors uppercase leading-none tracking-tight">
-                    {service.name}
-                  </h3>
-                  <div className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
-                </div>
-                <div className="w-12 h-1 bg-emerald-500/40 group-hover:w-full transition-all duration-500 rounded-full"></div>
-              </div>
-              
-              {/* Tavsif: text-[12px] va font-bold qilindi */}
-              <p className="text-[12px] text-slate-300 leading-tight font-bold uppercase opacity-90 line-clamp-2">
-                {service.description || "XIZMAT TAVSIFI"}
-              </p>
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-
-
-
-  const renderTasks = () => (
-    <div className="max-w-4xl mx-auto space-y-4 animate-in slide-in-from-right duration-500">
-      {/* Orqaga qaytish Headeri */}
-      <div className="flex items-center gap-4 mb-8 bg-white/5 p-4 rounded-2xl border border-white/10">
-        <button 
-          onClick={() => setView("graph")}
-          className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 transition-all"
-        >
-          <svg xmlns="http://w3.org" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div>
-          <h2 className="text-2xl font-bold text-white leading-none mb-1">{selectedService?.name}</h2>
-          <p className="text-slate-500 text-xs uppercase tracking-widest font-bold">Xizmat topshiriqlari ro'yxati</p>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500 mb-4"></div>
-          <p className="text-slate-500 italic">Ma'lumotlar yuklanmoqda...</p>
-        </div>
-      ) : tasks.length === 0 ? (
-        <div className="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10">
-          <p className="text-slate-500">Ushbu servis uchun hozircha topshiriqlar mavjud emas.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {tasks.map((task) => (
-            <div key={task.id} className="group bg-white/5 border border-white/10 p-5 rounded-2xl hover:bg-white/10 transition-all shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 border-l-emerald-500/50">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-bold text-emerald-400 group-hover:text-emerald-300 transition-colors">{task.title}</h3>
-                  <span className={`text-[10px] px-3 py-1 rounded-full border font-bold uppercase ${statusNames[task.status]?.color}`}>
-                    {statusNames[task.status]?.label}
-                  </span>
-                </div>
-                <p className="text-slate-400 text-sm leading-relaxed">{task.description}</p>
-              </div>
-              <button 
-                onClick={() => setSelectedTask(task)}
-                className="bg-emerald-600/10 hover:bg-emerald-600 border border-emerald-600/50 text-emerald-400 hover:text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
-              >
-                Batafsil ko'rish
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white p-6 overflow-x-hidden selection:bg-emerald-500/30">
-      <div className="max-w-7xl mx-auto">
-        
+    <div className="min-h-screen bg-[#f5f7fa] text-gray-900 p-6 overflow-x-hidden">
+      <div className="max-w-[3400px] mx-auto">
         {/* Navbar */}
-        <div className="flex justify-between items-center bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl mb-10 shadow-2xl">
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-teal-600 bg-clip-text text-transparent">
-              MSM ERP System
-            </h1>
-            <p className="text-slate-500 text-[10px] uppercase tracking-[0.2em] font-bold">Reviewer Control Panel</p>
-          </div>
-          <div className="flex items-center gap-4">
-             <div className="text-right hidden sm:block border-r border-white/10 pr-4">
-                <p className="text-sm font-bold text-slate-300">{user?.fullName || "Reviewer"}</p>
-                <p className="text-[10px] text-emerald-500 uppercase font-black">Online</p>
-             </div>
-             <button 
-               onClick={handleLogout} 
-               className="bg-red-500/10 hover:bg-red-500 border border-red-500/50 text-red-500 hover:text-white px-4 py-2 rounded-xl transition-all text-xs font-bold flex items-center gap-2"
-             >
-                Chiqish
-                <svg xmlns="http://w3.org" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-             </button>
-          </div>
-        </div>
+<div className="flex justify-between items-center bg-white border border-gray-200 p-5 rounded-2xl mb-10 shadow">
+  {/* Chap qism */}
+  <div className="flex items-center gap-4">
+    <button
+      onClick={() => navigate(`/reviewer_main?date=${selectedDate}`)}
+      className="p-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-xl text-gray-700 transition-all"
+      title="Asosiy sahifaga qaytish"
+    >
+      ←
+    </button>
 
-        {/* Asosiy Content */}
-        <main className="relative">
-          {view === "graph" ? renderGraph() : renderTasks()}
-        </main>
+    <div>
+      <h1 className="text-2xl font-bold text-gray-900">MSM Dashboard</h1>
+      <p className="text-xs uppercase tracking-[0.2em] text-gray-500 font-bold mt-1">
+        Department Jobs Overview
+      </p>
+    </div>
+  </div>
+
+  {/* O‘ng qism */}
+  <div className="flex items-center gap-4">
+    {/* Foydalanuvchi ma'lumotlari */}
+    <div className="text-right border-r border-gray-300 pr-4">
+      <p className="text-base font-bold text-gray-900">
+        {user?.firstName} {user?.lastName}
+      </p>
+      <p className="text-xs text-emerald-600 uppercase font-black">
+        {user?.role || "Reviewer"}
+      </p>
+    </div>
+
+    {/* Sana input */}
+    <div className="flex items-center gap-3">
+      <label className="text-sm font-bold text-gray-600">Sana:</label>
+      <input
+        type="date"
+        value={selectedDate}
+        onChange={(e) => setSelectedDate(e.target.value)}
+        className="border border-gray-300 rounded-xl px-4 py-2 outline-none focus:border-emerald-500 bg-white text-gray-700 font-medium"
+      />
+    </div>
+
+    {/* Chiqish tugmasi */}
+    <button
+      onClick={handleLogout}
+      className="bg-red-100 hover:bg-red-500 border border-red-300 text-red-600 hover:text-white px-5 py-2.5 rounded-2xl transition-all text-sm font-bold"
+    >
+      Chiqish
+    </button>
+  </div>
+</div>
+        {loading ? (
+          <div className="text-center mt-10 text-gray-500">Yuklanmoqda...</div>
+        ) : (
+          <main>{renderGraph()}</main>
+        )}
       </div>
     </div>
   );
