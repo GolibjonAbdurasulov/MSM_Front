@@ -159,7 +159,7 @@ export default function ReviewerPage() {
                 {departmentName}
               </h1>
               <p className="text-xs uppercase tracking-[0.2em] text-gray-500 font-bold mt-1">
-                Department Jobs Overview
+                Vazifalarni boshqarish sahifasi
               </p>
             </div>
           </div>

@@ -8,8 +8,12 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-    port: 8090,      // Portni 8080 ga o'zgartirdik
-    host: true,      // Tarmoqdagi boshqalar ulanishi uchun
-    strictPort: true // Agar 8080 band bo'lsa, boshqa portga o'tib ketmaydi
+    port: 8090,
+    host: true,
+    strictPort: true
+  },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true
   }
 })

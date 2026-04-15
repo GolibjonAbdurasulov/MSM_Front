@@ -11,7 +11,19 @@ export default function ReviewerMainPage() {
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+const [windowSize, setWindowSize] = useState({
+  width: window.innerWidth,
+  height: window.innerHeight,
+});
 
+useEffect(() => {
+  const handleResize = () => setWindowSize({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+  window.addEventListener("resize", handleResize);
+  return () => window.removeEventListener("resize", handleResize);
+}, []);
   const navigate = useNavigate();
 
   const storedUser = localStorage.getItem("user");
@@ -39,14 +51,14 @@ export default function ReviewerMainPage() {
       setLoading(true);
 
       const token = localStorage.getItem("token");
-      const res = await axios.get(
-        "http://localhost:5000/api/Department/GetAllDepartments",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+const res = await axios.get(
+  `${BASE_URL}/Department/GetAllDepartments`,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
 
       const departmentsWithCounts = await Promise.all(
         (res.data.content || []).map(async (department) => {
@@ -99,10 +111,8 @@ useEffect(() => {
   if (!token) return;
 
   const connection = new signalR.HubConnectionBuilder()
-    .withUrl("http://localhost:5000/jobHub", {
+    .withUrl(`${BASE_URL.replace("/api", "")}/jobHub`, {
       accessTokenFactory: () => token,
-      transport: signalR.HttpTransportType.WebSockets, // faqat WebSocket
-      skipNegotiation: true, // negotiationni o‘tkazib yuboradi
     })
     .withAutomaticReconnect()
     .build();
@@ -110,7 +120,7 @@ useEffect(() => {
   const startConnection = async () => {
     try {
       await connection.start();
-      console.log("SignalR connected WebSocket bilan");
+      console.log("SignalR connected");
     } catch (err) {
       console.error("SignalR ulanish xatosi:", err);
     }
@@ -129,18 +139,21 @@ useEffect(() => {
   };
 }, [selectedDate, token, fetchDepartments]);
 
-  // --- renderGraph funksiyasi shu yerda qoladi ---
-  const renderGraph = () => {
-    const total = departments.length;
+const renderGraph = () => {
+    const total = departments.length;  // ← BIRINCHI bu
     const hasAnyJobs = departments.some(
       (department) => department.activeJobsCount > 0
     );
 
-    const radiusX = total > 10 ? 620 : 540;
-    const radiusY = total > 10 ? 360 : 300;
-    const cardWidth = 240;
-    const centerSize = 270;
-    const containerHeight = "1100px";
+    const vw = windowSize.width;
+    const vh = windowSize.height - 120;
+
+    const cardWidth = Math.min(200, vw * 0.11);
+    const centerSize = Math.min(270, vw * 0.14);
+
+    const minR = centerSize / 2 + cardWidth + 30;
+    const radiusX = Math.max(minR, Math.min(vw * 0.36, total > 10 ? 620 : 500));
+    const radiusY = Math.max(minR * 0.6, Math.min(vh * 0.36, total > 10 ? 340 : 280));
 
     const getPosition = (index) => {
       const angle = ((360 / total) * index - 90) * (Math.PI / 180);
@@ -150,11 +163,14 @@ useEffect(() => {
       };
     };
 
+
+    const containerHeight = "100vh";
+
     return (
-      <div
-        className="relative w-full flex items-center justify-center overflow-hidden"
-        style={{ height: containerHeight }}
-      >
+<div
+  className="relative w-full flex items-center justify-center overflow-hidden"
+  style={{ height: "calc(100vh - 120px)" }}
+>
         <style>
           {`
             @keyframes dashMoveToCenter {
@@ -216,7 +232,7 @@ useEffect(() => {
               Servis Markazi
             </p>
             <div className="mt-5 text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">
-              {hasAnyJobs ? "Active Jobs" : "No Active Jobs"}
+              {hasAnyJobs ? "Faol Vazifalar" : "Vazifalar yo'q"}
             </div>
           </div>
         </div>
@@ -251,7 +267,7 @@ useEffect(() => {
                 <div className="flex justify-between items-start gap-3 mb-4">
                   <div className="flex-1 min-w-0">
                     <h3
-                      className={`font-black uppercase leading-tight transition-colors break-words text-base ${
+                      className={`font-black  leading-tight transition-colors break-words text-base ${
                         hasJobs
                           ? "text-gray-900 group-hover:text-emerald-600"
                           : "text-gray-700 group-hover:text-gray-900"
@@ -294,7 +310,7 @@ useEffect(() => {
     <div>
       <h1 className="text-2xl font-bold text-gray-900">MSM Dashboard</h1>
       <p className="text-xs uppercase tracking-[0.2em] text-gray-500 font-bold mt-1">
-        Department Jobs Overview
+        Vazifalarni boshqarish sahifasi
       </p>
     </div>
   </div>
