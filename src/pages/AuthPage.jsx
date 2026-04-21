@@ -297,7 +297,6 @@ export default function AuthPage({ setUser }) {
                 </select>
               </div>
 
-              {/* ✅ YANGI: Department select */}
               <div className="flex-1">
                 <label className="text-xs font-semibold text-blue-200 mb-2 block uppercase tracking-wider">
                   Bo'lim
@@ -345,3 +344,18 @@ export default function AuthPage({ setUser }) {
     </div>
   );
 }
+
+
+
+// INSERT INTO departments 
+// (department_full_name, department_short_name, department_workers_count)
+// VALUES
+// ('Nazorat o‘lchov asboblari va avtomatikasi boshqarmasi', 'NO’AvaAB', FLOOR(RANDOM() * 51 + 50)),
+// ('Metall konstruksiyalar bo`linmasi', 'MKB', FLOOR(RANDOM() * 51 + 50)),
+// ('Quyuv-mexanika bo`linmasi', 'QMB', FLOOR(RANDOM() * 51 + 50)),
+// ('Elektrotexnika laboratoriyasi', 'ETL', FLOOR(RANDOM() * 51 + 50)),
+// ('Elekt uskunalarni ta’mirlash bo`linmasi', 'EUTB', FLOOR(RANDOM() * 51 + 50)),
+// ('Mehanika bo`linmasi', 'MB', FLOOR(RANDOM() * 51 + 50)),
+// ('Texnologik jarayonlarni avtomatlashtirilgan boshqaruv tizmlari laboratoriyasi', 'TJABTL', FLOOR(RANDOM() * 51 + 50)),
+// ('Mehanik ta’mirlash bo`linmasi', 'MTB', FLOOR(RANDOM() * 51 + 50)),
+// ('Ta’mirlash bo`linmasi', 'TB', FLOOR(RANDOM() * 51 + 50));
