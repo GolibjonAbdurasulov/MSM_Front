@@ -292,8 +292,8 @@ export default function AuthPage({ setUser }) {
                   onChange={(e) => setRegRole(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl bg-blue-950 border border-white/20 text-white outline-none focus:border-blue-400 transition-all"
                 >
-                  <option value="Reviewer">Topshiriq beruvchi</option>
-                  <option value="Publisher">Kuzatuvchi</option>
+                  <option value="Reviewer">Kuzatuvchi</option>
+                  <option value="Publisher">Topshiriq beruvchi</option>
                 </select>
               </div>
 

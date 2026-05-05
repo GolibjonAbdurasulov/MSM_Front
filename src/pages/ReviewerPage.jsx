@@ -34,14 +34,47 @@ export default function ReviewerPage() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [jobDetails, setJobDetails] = useState(null);
   const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [departmentInfo, setDepartmentInfo] = useState(null);
+  const [stats, setStats] = useState({ activeJobsCount: 0, mobilizedWorkers: 0 });
 
-  // Jobs fetch function
+  const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
+
+  const buildTimeParam = useCallback(() => {
+    return `${selectedDate} ${getCurrentTime()}:00.000`;
+  }, [selectedDate]);
+
+  const fetchDepartmentInfo = useCallback(async () => {
+    if (!departmentId) return;
+    try {
+      const timeParam = buildTimeParam();
+      const [deptRes, statsRes] = await Promise.all([
+        axios.get(`${BASE_URL}/Department/GetDepartmentById`, {
+          params: { id: departmentId },
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        axios.get(`${BASE_URL}/Department/GetDepartmentStatistics`, {
+          params: { id: departmentId, date: timeParam },
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+      setDepartmentInfo(deptRes.data.content || null);
+      const s = statsRes.data.content || {};
+      setStats({
+        activeJobsCount: s.activeJobsCount ?? 0,
+        mobilizedWorkers: s.mobilizedWorkers ?? 0,
+      });
+    } catch (err) {
+      console.error("Department info xatolik:", err);
+    }
+  }, [departmentId, selectedDate, token, buildTimeParam]);
+
   const fetchJobs = useCallback(async () => {
     if (!departmentId) return;
     try {
       setLoading(true);
+      const timeParam = buildTimeParam();
       const res = await axios.get(`${BASE_URL}/Job/GetAllJobsByDepartmentId`, {
-        params: { departmentId, time: new Date(selectedDate).toISOString() },
+        params: { departmentId, time: timeParam },
         headers: { Authorization: `Bearer ${token}` },
       });
       setJobs(res.data.content || []);
@@ -50,9 +83,8 @@ export default function ReviewerPage() {
     } finally {
       setLoading(false);
     }
-  }, [departmentId, selectedDate, token]);
+  }, [departmentId, selectedDate, token, buildTimeParam]);
 
-  // Job details fetch
   const fetchJobDetails = async (jobId) => {
     try {
       const res = await axios.get(`${BASE_URL}/Job/GetJobById`, {
@@ -65,7 +97,9 @@ export default function ReviewerPage() {
     }
   };
 
-  // SignalR connection
+  useEffect(() => { fetchDepartmentInfo(); }, [fetchDepartmentInfo]);
+  useEffect(() => { fetchJobs(); }, [fetchJobs]);
+
   useEffect(() => {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`${BASE_URL.replace("/api", "")}/jobHub`, {
@@ -74,47 +108,37 @@ export default function ReviewerPage() {
       .withAutomaticReconnect()
       .build();
 
-    connection
-      .start()
+    connection.start()
       .then(() => console.log("SignalR connected"))
       .catch((err) => console.error("SignalR ulanish xatosi:", err));
 
     connection.on("JobChanged", (data) => {
-      if (
-        data.departmentId === Number(departmentId) &&
-        data.date === selectedDate
-      ) {
+      if (data.departmentId === Number(departmentId) && data.date === selectedDate) {
         fetchJobs();
+        fetchDepartmentInfo();
       }
     });
-    connection.on("JobDeleted", async (data) => {
-  if (
-    data.departmentId === Number(departmentId) &&
-    data.date === selectedDate
-  ) {
-    await fetchJobs();
 
-    if (selectedJob?.id) {
-      try {
-        await axios.get(`${BASE_URL}/Job/GetJobById`, {
-          params: { id: selectedJob.id },
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch {
-        setSelectedJob(null);
-        setJobDetails(null);
+    connection.on("JobDeleted", async (data) => {
+      if (data.departmentId === Number(departmentId) && data.date === selectedDate) {
+        await fetchJobs();
+        fetchDepartmentInfo();
+        if (selectedJob?.id) {
+          try {
+            await axios.get(`${BASE_URL}/Job/GetJobById`, {
+              params: { id: selectedJob.id },
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          } catch {
+            setSelectedJob(null);
+            setJobDetails(null);
+          }
+        }
       }
-    }
-  }
-});
+    });
 
     return () => connection.stop();
-  }, [departmentId, selectedDate, fetchJobs, token]);
-
-  // Fetch jobs on date or department change
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+  }, [departmentId, selectedDate, fetchJobs, fetchDepartmentInfo, token]);
 
   const handleJobClick = (job) => {
     setSelectedJob(job);
@@ -126,26 +150,22 @@ export default function ReviewerPage() {
     window.location.href = "/";
   };
 
-  const departmentName =
-    jobs.length > 0 ? jobs[0].departmentName : "Department nomi mavjud emas";
-
   const formatDate = (date) => {
     if (!date) return "-";
-    const d = new Date(date);
-    return d.toLocaleString("uz-UZ", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
+    return new Date(date).toLocaleString("uz-UZ", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit",
     });
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-6 relative">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-[#f5f7fa] text-gray-900 p-6 overflow-x-hidden">
+      <div className="max-w-[1800px] mx-auto">
+
         {/* Navbar */}
-        <div className="flex justify-between items-center bg-white border border-gray-200 p-5 rounded-2xl mb-10 shadow">
+        <div className="bg-white border border-gray-200 rounded-3xl shadow-md px-6 py-5 mb-8 flex justify-between items-center gap-3 flex-nowrap">
+
+          {/* Chap — sarlavha */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate(`/reviewer_main?date=${selectedDate}`)}
@@ -155,15 +175,48 @@ export default function ReviewerPage() {
               ←
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {departmentName}
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+                {departmentInfo?.departmentShortName || "Department"}
               </h1>
-              <p className="text-xs uppercase tracking-[0.2em] text-gray-500 font-bold mt-1">
-                Vazifalarni boshqarish sahifasi
+              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                {departmentInfo?.departmentFullName || ""}
               </p>
             </div>
           </div>
+
+          {/* O'ng qism */}
           <div className="flex items-center gap-4">
+
+            {/* Statistika */}
+            <div className="flex items-center gap-4 border-r border-gray-200 pr-4">
+              <div className="text-center">
+                <p className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1">
+                  Vazifalar
+                </p>
+                <p className={`text-xl font-black ${stats.activeJobsCount > 0 ? "text-emerald-600" : "text-gray-400"}`}>
+                  {stats.activeJobsCount}
+                </p>
+              </div>
+              <div className="w-px h-10 bg-gray-200" />
+              <div className="text-center">
+                <p className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mb-1">
+                  Ishchilar
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
+                  <span className="text-xl font-black text-blue-600">
+                    {departmentInfo?.departmentWorkersCount ?? 0}
+                  </span>
+                  <span className="text-gray-300 font-bold">/</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                  <span className="text-xl font-black text-emerald-600">
+                    {stats.mobilizedWorkers}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* User */}
             <div className="text-right border-r border-gray-300 pr-4">
               <p className="text-base font-bold text-gray-900">
                 {user?.firstName} {user?.lastName}
@@ -172,6 +225,8 @@ export default function ReviewerPage() {
                 {user?.role || "Reviewer"}
               </p>
             </div>
+
+            {/* Sana */}
             <div className="flex items-center gap-3">
               <label className="text-sm font-bold text-gray-600">Sana:</label>
               <input
@@ -181,9 +236,11 @@ export default function ReviewerPage() {
                 className="border border-gray-300 rounded-xl px-4 py-2 outline-none focus:border-emerald-500 bg-white text-gray-700 font-medium"
               />
             </div>
+
+            {/* Chiqish */}
             <button
               onClick={handleLogout}
-              className="bg-red-100 hover:bg-red-500 border border-red-300 text-red-600 hover:text-white px-5 py-2.5 rounded-2xl transition-all text-sm font-bold"
+              className="bg-red-100 hover:bg-red-500 border border-red-300 text-red-600 hover:text-white px-5 py-2.5 rounded-2xl transition-all font-bold"
             >
               Chiqish
             </button>
@@ -211,9 +268,7 @@ export default function ReviewerPage() {
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <h3 className="text-lg font-bold text-gray-900">
-                        {job.title}
-                      </h3>
+                      <h3 className="text-lg font-bold text-gray-900">{job.title}</h3>
                       <span
                         className={`text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-tighter inline-block border ${
                           statusColors[job.jobStatus] || statusColors.default
@@ -222,18 +277,14 @@ export default function ReviewerPage() {
                         {statusUz[job.jobStatus] || job.jobStatus}
                       </span>
                     </div>
-                    <p className="text-gray-500 text-sm line-clamp-1">
-                      {job.description}
-                    </p>
+                    <p className="text-gray-500 text-sm line-clamp-1">{job.description}</p>
                   </div>
-                  <div className="flex items-center gap-6 text-sm">
-                    <button
-                      onClick={() => handleJobClick(job)}
-                      className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 px-6 py-2 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
-                    >
-                      Batafsil
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleJobClick(job)}
+                    className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 px-6 py-2 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
+                  >
+                    Batafsil
+                  </button>
                 </div>
               ))}
             </div>
@@ -285,23 +336,17 @@ export default function ReviewerPage() {
                     <h4 className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
                       Boshlanish sanasi:
                     </h4>
-                    <p className="text-gray-700 font-bold mt-1">
-                      {formatDate(jobDetails.startedDate)}
-                    </p>
+                    <p className="text-gray-700 font-bold mt-1">{formatDate(jobDetails.startedDate)}</p>
                   </div>
                   <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200">
                     <h4 className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
                       Tugash sanasi:
                     </h4>
-                    <p className="text-gray-700 font-bold mt-1">
-                      {formatDate(jobDetails.endDate)}
-                    </p>
+                    <p className="text-gray-700 font-bold mt-1">{formatDate(jobDetails.endDate)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-500 border-t border-gray-200 pt-6">
-                  <span>
-                    👤 Yaratuvchi: <b>{jobDetails.publisherName}</b>
-                  </span>
+                  <span>👤 Yaratuvchi: <b>{jobDetails.publisherName}</b></span>
                 </div>
               </div>
             </div>

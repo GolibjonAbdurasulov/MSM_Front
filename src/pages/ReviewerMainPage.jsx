@@ -11,6 +11,8 @@ export default function ReviewerMainPage() {
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  // Joriy vaqtni har doim real-time olish uchun getter
+  const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
   const [windowSize, setWindowSize] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -40,24 +42,33 @@ export default function ReviewerMainPage() {
     navigate("/", { replace: true });
   };
 
+  // "2026-04-21 05:33:00.000" formatini yasaydigan helper — vaqt har doim joriy soat
+  const buildTimeParam = useCallback(() => {
+    return `${selectedDate} ${getCurrentTime()}:00.000`;
+  }, [selectedDate]);
+
   const fetchDepartments = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
       const tk = localStorage.getItem("token");
+      const timeParam = buildTimeParam();
 
       const res = await axios.get(`${BASE_URL}/Department/GetAllDepartments`, {
+        params: { time: timeParam },
         headers: { Authorization: `Bearer ${tk}` },
       });
 
       const departmentsWithStats = await Promise.all(
         (res.data.content || []).map(async (department) => {
           try {
-            // ✅ Statistics API
             const statsRes = await axios.get(
               `${BASE_URL}/Department/GetDepartmentStatistics`,
               {
-                params: { id: department.id },
+                params: {
+                  id: department.id,
+                  date: timeParam,
+                },
                 headers: { Authorization: `Bearer ${tk}` },
               }
             );
@@ -85,7 +96,7 @@ export default function ReviewerMainPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, token]);
+  }, [selectedDate, token, buildTimeParam]);
 
   useEffect(() => {
     fetchDepartments();
@@ -127,9 +138,6 @@ export default function ReviewerMainPage() {
     const vh = windowSize.height - 120;
 
     const cardWidth = Math.min(200, vw * 0.11);
-    // cardWidth ni kattalashtiring
-    //const cardWidth = Math.min(250, vw * 0.14); // 200 → 230, 0.11 → 0.14
-
     const centerSize = Math.min(270, vw * 0.14);
 
     const minR = centerSize / 2 + cardWidth + 30;
@@ -232,7 +240,9 @@ export default function ReviewerMainPage() {
                     : "border-gray-200 hover:border-gray-400"
                 }`}
                 onClick={() =>
-                  navigate(`/reviewer_department/${department.id}?date=${selectedDate}`)
+                  navigate(
+                    `/reviewer_department/${department.id}?date=${selectedDate}&time=${encodeURIComponent(buildTimeParam())}`
+                  )
                 }
               >
                 {/* Nom */}
@@ -252,37 +262,34 @@ export default function ReviewerMainPage() {
                 {/* Divider */}
                 <div className="w-full h-px bg-gray-100 mb-3" />
 
-{/* Divider */}
-<div className="w-full h-px bg-gray-100 mb-3" />
+                {/* Statistika */}
+                <div className="space-y-2">
+                  {/* Vazifalar */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">
+                      Vazifalar:
+                    </span>
+                    <span className={`text-sm font-black ${hasJobs ? "text-emerald-600" : "text-gray-400"}`}>
+                      {department.activeJobsCount}
+                    </span>
+                  </div>
 
-{/* ✅ Statistika */}
-<div className="space-y-2">
-  {/* Vazifalar */}
-  <div className="flex items-center gap-2">
-    <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">
-      Vazifalar:
-    </span>
-    <span className={`text-sm font-black ${hasJobs ? "text-emerald-600" : "text-gray-400"}`}>
-      {department.activeJobsCount}
-    </span>
-  </div>
-
-  {/* Ishchilar */}
-  <div className="flex items-center gap-1.5 flex-wrap">
-    <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">
-      Ishchilar:
-    </span>
-    <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
-    <span className="text-sm font-black text-blue-600">
-      {department.departmentWorkersCount}
-    </span>
-    <span className="text-gray-300">/</span>
-    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
-    <span className="text-sm font-black text-emerald-600">
-      {department.mobilizedWorkers}
-    </span>
-  </div>
-</div>
+                  {/* Ishchilar */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">
+                      Ishchilar:
+                    </span>
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                    <span className="text-sm font-black text-blue-600">
+                      {department.departmentWorkersCount}
+                    </span>
+                    <span className="text-gray-300">/</span>
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                    <span className="text-sm font-black text-emerald-600">
+                      {department.mobilizedWorkers}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           );
@@ -298,7 +305,7 @@ export default function ReviewerMainPage() {
         <div className="flex justify-between items-center bg-white border border-gray-200 p-5 rounded-2xl mb-10 shadow">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(`/reviewer_main?date=${selectedDate}`)}
+              onClick={() => navigate(`/reviewer_main?date=${selectedDate}&time=${encodeURIComponent(buildTimeParam())}`)}
               className="p-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-xl text-gray-700 transition-all"
             >
               ←
@@ -328,6 +335,7 @@ export default function ReviewerMainPage() {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="border border-gray-300 rounded-xl px-4 py-2 outline-none focus:border-emerald-500 bg-white text-gray-700 font-medium"
               />
+
             </div>
             <button
               onClick={handleLogout}
