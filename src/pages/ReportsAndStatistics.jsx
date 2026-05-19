@@ -28,6 +28,7 @@ export default function ReportsAndStatistics() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const fetchStats = useCallback(async () => {
     if (!startDate || !endDate) return;
@@ -63,6 +64,37 @@ export default function ReportsAndStatistics() {
     { name: "Jarayonda", soni: stats.inProgressJobs, fill: COLORS.inProgress },
     { name: "Muvaffaqiyatsiz", soni: stats.failedJobs, fill: COLORS.failed },
   ] : [];
+
+  const handleExport = async () => {
+  if (!startDate || !endDate) return;
+  try {
+    setExporting(true);
+    const res = await axios.get(`${BASE_URL}/Statistics/Export/statistics/export`, {
+      params: {
+        departmentId: user.departmentId,
+        fromDate: `${startDate}T00:00:00`,
+        toDate: `${endDate}T23:59:59`,
+      },
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: "blob", // ← muhim!
+    });
+
+    // Yuklab olish
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `hisobot_${startDate}_${endDate}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Export xatolik:", err);
+    alert("Hisobotni yuklab bo'lmadi");
+  } finally {
+    setExporting(false);
+  }
+};
 
   const completionRate = stats?.totalJobs > 0
     ? Math.round((stats.completedJobs / stats.totalJobs) * 100)
@@ -166,6 +198,29 @@ export default function ReportsAndStatistics() {
               className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-2xl font-bold transition-all disabled:opacity-50">
               {loading ? "Yuklanmoqda..." : "Ko'rsatish"}
             </button>
+
+{/* YANGI — Export tugmasi */}
+<button
+  onClick={handleExport}
+  disabled={exporting || !startDate || !endDate}
+  className="flex items-center gap-2 bg-white hover:bg-emerald-50 border-2 border-emerald-400 text-emerald-600 px-6 py-2.5 rounded-2xl font-bold transition-all disabled:opacity-50">
+  {exporting ? (
+    <>
+      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+      </svg>
+      Yuklanmoqda...
+    </>
+  ) : (
+    <>
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M8 12l4 4 4-4M12 4v12" />
+      </svg>
+      Excel yuklab olish
+    </>
+  )}
+</button>
           </div>
         </div>
 
@@ -218,30 +273,52 @@ export default function ReportsAndStatistics() {
                 {/* Pie Chart */}
                 <div className="bg-white border border-gray-200 rounded-3xl shadow-md p-6">
                   <h3 className="text-lg font-bold text-gray-700 mb-6">Vazifalar holati</h3>
-                  {pieData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={pieData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={70}
-                          outerRadius={110}
-                          paddingAngle={4}
-                          dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        >
-                          {pieData.map((entry, index) => (
-                            <Cell key={index} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value) => [`${value} ta`, ""]} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="text-center py-10 text-gray-400">Ma'lumot yo'q</div>
-                  )}
+{pieData.length === 1 ? (
+  // Bitta segment — oddiy to'liq doira
+  <ResponsiveContainer width="100%" height={300}>
+    <PieChart>
+      <Pie
+        data={pieData}
+        cx="50%"
+        cy="50%"
+        innerRadius={70}
+        outerRadius={110}
+        startAngle={0}
+        endAngle={360}
+        dataKey="value"
+        strokeWidth={0}
+      >
+        {pieData.map((entry, index) => (
+          <Cell key={index} fill={entry.color} stroke="none" />
+        ))}
+      </Pie>
+      <Tooltip formatter={(value) => [`${value} ta`, ""]} />
+      <Legend />
+    </PieChart>
+  </ResponsiveContainer>
+) : (
+  // Ko'p segment — oddiy pie
+  <ResponsiveContainer width="100%" height={300}>
+    <PieChart>
+      <Pie
+        data={pieData}
+        cx="50%"
+        cy="50%"
+        innerRadius={70}
+        outerRadius={110}
+        paddingAngle={4}
+        dataKey="value"
+        strokeWidth={0}
+      >
+        {pieData.map((entry, index) => (
+          <Cell key={index} fill={entry.color} stroke="none" />
+        ))}
+      </Pie>
+      <Tooltip formatter={(value) => [`${value} ta`, ""]} />
+      <Legend />
+    </PieChart>
+  </ResponsiveContainer>
+)}
                 </div>
 
                 {/* Bar Chart */}

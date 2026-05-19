@@ -14,6 +14,9 @@ export default function WorkersPage() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = React.useRef(null);
+
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -68,6 +71,43 @@ export default function WorkersPage() {
   };
 
   const displayedWorkers = search.length >= 2 ? searchResults : workers;
+
+  const handleImportExcel = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (!file.name.endsWith(".xlsx")) {
+    alert("Faqat .xlsx fayl qabul qilinadi");
+    return;
+  }
+
+  try {
+    setImporting(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    await axios.post(
+      `${BASE_URL}/Worker/ImportWorkers/${user.departmentId}`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    alert("Ishchilar muvaffaqiyatli import qilindi!");
+    fetchWorkers();
+  } catch (err) {
+    alert("Import qilishda xatolik yuz berdi");
+    console.error(err);
+  } finally {
+    setImporting(false);
+    // Input ni tozalash — qayta fayl tanlash mumkin bo'lsin
+    e.target.value = "";
+  }
+};
 
   // Create
   const handleCreate = async () => {
@@ -216,11 +256,41 @@ export default function WorkersPage() {
               </div>
             </div>
 
-            {/* Yangi worker */}
-            <button onClick={() => setShowCreateModal(true)}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-2xl font-bold transition-all">
-              + Yangi ishchi
-            </button>
+{/* Excel import */}
+<div>
+  <input
+    type="file"
+    accept=".xlsx"
+    ref={fileInputRef}
+    onChange={handleImportExcel}
+    className="hidden"
+  />
+  <button
+    onClick={() => fileInputRef.current.click()}
+    disabled={importing}
+    className="flex items-center gap-2 bg-blue-100 hover:bg-blue-500 border border-blue-200 text-blue-600 hover:text-white px-5 py-2.5 rounded-2xl font-bold transition-all disabled:opacity-50">
+    {importing ? (
+      <>
+        <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+        Import...
+      </>
+    ) : (
+      <>
+        <span>📥</span>
+        Excel import
+      </>
+    )}
+  </button>
+</div>
+
+{/* Yangi worker */}
+<button onClick={() => setShowCreateModal(true)}
+  className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-2xl font-bold transition-all">
+  + Yangi ishchi
+</button>
 
             {/* Profile */}
             <div className="relative">

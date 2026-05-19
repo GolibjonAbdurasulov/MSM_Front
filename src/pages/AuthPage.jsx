@@ -63,9 +63,14 @@ export default function AuthPage({ setUser }) {
       setLoginPassword("");
       if (userData.role === "Publisher") {
         navigate("/publisher");
-      } else if (userData.role === "Reviewer") {
+      } 
+      else if (userData.role === "Reviewer") {
         navigate("/reviewer_main");
-      } else {
+      }
+      else if (userData.role === "Admin") {
+        navigate("/admin");
+      } 
+      else {
         navigate("/");
       }
     } catch (err) {

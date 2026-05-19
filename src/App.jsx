@@ -8,6 +8,8 @@ import PublisherPage from "./pages/PublisherPage";
 import ReviewerMainPage from "./pages/ReviewerMainPage";
 import WorkersPage from "./pages/WorkersPage";
 import PublisherSettings from "./pages/PublisherSettingsPage";
+import AdminPage from "./pages/admin_pages/AdminPage";
+import TelegramSettingsPage from "./pages/admin_pages/TelegramSettingsPage";
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -46,12 +48,27 @@ function App() {
           }
         />
 
+        <Route
+          path="/telegram_settings"
+          element={
+            user ? <TelegramSettingsPage /> : <Navigate to="/" replace />
+          }
+        />
+
         <Route 
         path="/reports" element={
           user ? <ReportsAndStatistics /> : <Navigate to="/" replace />
-
         } 
         />
+        
+<Route 
+  path="/admin" 
+  element={
+    localStorage.getItem("user") 
+      ? <AdminPage /> 
+      : <Navigate to="/" replace />
+  } 
+/>  
 
         <Route
         path="/reviewer_department/:departmentId"
